@@ -92,7 +92,6 @@ export default function MembersPanel({ project, currentUserId, onUpdated }) {
             <select className="input text-sm w-32" value={role} onChange={(e) => setRole(e.target.value)}>
               <option value="editor">Editor</option>
               <option value="viewer">Viewer</option>
-              <option value="commentor">Commentor</option>
             </select>
             <button className="btn btn-primary text-sm whitespace-nowrap" disabled={adding}>
               {adding ? "Adding..." : "Invite"}
