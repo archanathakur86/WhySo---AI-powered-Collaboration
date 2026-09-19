@@ -1,8 +1,8 @@
-# CollabSphere 🚀
+# WhySo
 
 AI-powered developer collaboration platform — a mini GitHub + Notion, supercharged with **Groq AI** (Llama models). Built as a placement-ready full-stack capstone project.
 
-## ✨ Features
+## Features
 
 ### Core Platform
 - **Authentication** — JWT + bcrypt, secure register/login
@@ -16,18 +16,18 @@ AI-powered developer collaboration platform — a mini GitHub + Notion, supercha
 ### AI Features (powered by Groq)
 | Feature | What it does |
 |---|---|
-| 🧠 Explain Note / Explain Code | Plain-English explanation of notes or uploaded code |
-| ✨ Improve Note | AI-suggested edits for clarity |
-| 🏷️ Auto-Tagging | Every note gets AI-generated tags automatically |
-| 🔍 AI Code Review | Diffs old vs new file version, flags risks like a PR reviewer |
-| 📄 AI README Generator | Scans project files/notes → drafts a full README.md |
-| 📊 Weekly Report Generator | Turns raw activity logs into a stakeholder-ready report |
-| 🩺 Project Health Score | Classifies project as Healthy / Slowing / Inactive with reasoning |
-| 🔎 AI Semantic Search | Natural-language search across notes & files (not just keyword match) |
-| ✅ AI Task Extraction | Pulls action items out of meeting notes into a task board |
-| 🔁 Duplicate Note Detector | Warns when a new note looks like an existing one |
+|  Explain Note / Explain Code | Plain-English explanation of notes or uploaded code |
+|  Improve Note | AI-suggested edits for clarity |
+|  Auto-Tagging | Every note gets AI-generated tags automatically |
+|  AI Code Review | Diffs old vs new file version, flags risks like a PR reviewer |
+|  AI README Generator | Scans project files/notes → drafts a full README.md |
+|  Weekly Report Generator | Turns raw activity logs into a stakeholder-ready report |
+|  Project Health Score | Classifies project as Healthy / Slowing / Inactive with reasoning |
+|  AI Semantic Search | Natural-language search across notes & files (not just keyword match) |
+|  AI Task Extraction | Pulls action items out of meeting notes into a task board |
+|  Duplicate Note Detector | Warns when a new note looks like an existing one |
 
-### 🤖 Bonus: Voice AI Assistant ("Sphere")
+###  Bonus: Voice AI Assistant ("Sphere")
 A ChatGPT-style floating assistant, built with the **Web Speech API**:
 - **Speech-to-Text (STT)** — tap the mic, speak your question
 - **Speech-to-Speech (STS)** — response is spoken back aloud *and* shown as text
@@ -36,7 +36,7 @@ A ChatGPT-style floating assistant, built with the **Web Speech API**:
 - Full loading states: `listening → thinking → speaking`
 - Graceful error handling: mic permission denied, no speech detected, API timeout, network failure
 
-## 🛠 Tech Stack
+##  Tech Stack
 
 | Layer | Tech |
 |---|---|
@@ -48,10 +48,10 @@ A ChatGPT-style floating assistant, built with the **Web Speech API**:
 | Real-time | Socket.io |
 | Auth | JWT + bcrypt |
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
-collabsphere/
+WhySo/
 ├── backend/
 │   ├── config/          # db.js, cloudinary.js
 │   ├── models/          # User, Project, Note, FileItem, Conversation, Task
@@ -68,7 +68,7 @@ collabsphere/
         └── components/    # NoteEditor, FileUpload, VoiceAssistant, AnalyticsPanel, etc.
 ```
 
-## ⚙️ Setup Instructions
+##  Setup Instructions
 
 ### Prerequisites
 - Node.js 18+
@@ -105,26 +105,26 @@ Frontend runs on `http://localhost:5173`.
 2. Create a project
 3. Add a markdown note → watch AI auto-tag it
 4. Upload a `.js` or `.py` file → click "Explain Code" or "AI Code Review"
-5. Click the 🤖 floating button → talk to Sphere with your mic
+5. Click the floating button → talk to Sphere with your mic
 6. Check the "AI Reports" tab for weekly report + README generation
 7. Try "Search" tab with a natural-language query
 
-## 🔑 Environment Variables
+##  Environment Variables
 
 See `backend/.env.example` and `frontend/.env.example` for the full list. Never commit real `.env` files — they're already in `.gitignore`.
 
-## 🚀 Deployment
+##  Deployment
 
 - **Backend** → Render / Railway / AWS EC2
 - **Frontend** → Vercel / Netlify
 - **Database** → MongoDB Atlas
 - Remember to update `CLIENT_URL` (backend) and `VITE_API_URL` (frontend) for production.
 
-## 📌 Notes on AI Architecture
+## Notes on AI Architecture
 
 All Groq calls are centralized in `backend/services/groqService.js` — every AI feature (explain, review, README gen, search, task extraction, assistant chat) is a thin wrapper around one `chatCompletion()` function. This keeps the code DRY, makes it trivial to swap models, and is a good talking point in interviews: *"I built one reusable AI service layer that every feature routes through, with JSON-mode structured outputs for anything that needs parsing."*
 
-## 🔮 Future Scope (great for a README "roadmap" section)
+##  Future Scope (great for a README "roadmap" section)
 - Vector embeddings + MongoDB Atlas Vector Search for true semantic search at scale
 - GitHub OAuth import for real repos
 - Slack/Discord notifications on AI-flagged risks in code review
