@@ -1,60 +1,59 @@
-import asyncHandler from "express-async-handler";
 import mongoose from "mongoose";
+import asyncHandler from "express-async-handler";
 import Conversation from "../models/Conversation.js";
-import Project from "../models/Project.js";
 import User from "../models/User.js";
 import { fastCompletion } from "../services/groqService.js";
 
-const MAX_HISTORY = 20; // messages kept per conversation for context window
+const MAX_HISTORY = 20; // messages sent to the model as context
+const MAX_STORED = 100; // messages kept per conversation
+const MAX_CONVERSATIONS = 100; // conversations returned in the sidebar
 
-// Normalizes an incoming projectId (from body or query) to either a valid
-// ObjectId or null. Also verifies the user actually belongs to that project,
-// so someone can't read/write another user's project conversation.
-const resolveProject = async (rawProjectId, userId) => {
-  if (!rawProjectId || !mongoose.Types.ObjectId.isValid(rawProjectId)) return null;
-
-  const project = await Project.findById(rawProjectId).select("name owner members");
-  if (!project) return null;
-
-  const isOwner = project.owner.toString() === userId.toString();
-  const isMember = project.members.some((m) => m.user.toString() === userId.toString());
-  if (!isOwner && !isMember) return null;
-
-  return project;
+const makeTitle = (text = "") => {
+  const clean = text.trim().replace(/\s+/g, " ");
+  return clean.length > 40 ? `${clean.slice(0, 40).trimEnd()}…` : clean || "New chat";
 };
 
-const buildSystemPrompt = (user, project) => {
+const buildSystemPrompt = (user) => {
   const memoryLine =
     user.memoryFacts && user.memoryFacts.length
       ? `Known facts about the user: ${user.memoryFacts.join("; ")}.`
       : "";
-  const projectLine = project
-    ? `You are currently helping the user inside their project called "${project.name}". Answer with that project's context in mind when relevant.`
-    : "You are currently in the general workspace, not inside any specific project.";
+  return `You are Sphere, the built-in AI assistant for WhySo, a developer collaboration platform. The user's name is ${user.name}. Greet or address them by name naturally sometimes, but don't overdo it every message. The user can have many separate chats with you, so focus on the current conversation. Keep answers concise and conversational since responses may be read aloud via text-to-speech - avoid long lists, avoid markdown symbols like asterisks or hashes, prefer short plain sentences. ${memoryLine} If the user shares a new fact about themselves worth remembering (preferences, their role, ongoing project), note it naturally in your reply but keep it brief.`;
+};
 
-  return `You are Sphere, the built-in AI assistant for WhySo, a developer collaboration platform. The user's name is ${user.name}. Greet or address them by name naturally sometimes, but don't overdo it every message. ${projectLine} Keep answers concise and conversational since responses may be read aloud via text-to-speech - avoid long lists, avoid markdown symbols like asterisks or hashes, prefer short plain sentences. ${memoryLine} If the user shares a new fact about themselves worth remembering (preferences, their role, ongoing project), note it naturally in your reply but keep it brief.`;
+// Loads a conversation that belongs to the logged-in user, or throws 404.
+const findOwnedConversation = async (id, userId, res) => {
+  if (!mongoose.isValidObjectId(id)) {
+    res.status(404);
+    throw new Error("Conversation not found");
+  }
+  const conversation = await Conversation.findOne({ _id: id, user: userId });
+  if (!conversation) {
+    res.status(404);
+    throw new Error("Conversation not found");
+  }
+  return conversation;
 };
 
 // @route POST /api/assistant/chat
-// body: { message: string, projectId?: string }
+// body: { message: string, conversationId?: string }
+// - no conversationId  -> starts a NEW chat
+// - with conversationId -> continues that chat
 export const chatWithAssistant = asyncHandler(async (req, res) => {
-  const { message, projectId } = req.body;
+  const { message, conversationId } = req.body;
   if (!message || !message.trim()) {
     res.status(400);
     throw new Error("Message cannot be empty");
   }
 
-  const project = await resolveProject(projectId, req.user._id);
-  const projectKey = project ? project._id : null;
-
-  let conversation = await Conversation.findOne({ user: req.user._id, project: projectKey });
-  if (!conversation) {
-    conversation = await Conversation.create({ user: req.user._id, project: projectKey, messages: [] });
+  let conversation = null;
+  if (conversationId) {
+    conversation = await findOwnedConversation(conversationId, req.user._id, res);
   }
 
-  const systemPrompt = buildSystemPrompt(req.user, project);
+  const systemPrompt = buildSystemPrompt(req.user);
 
-  const recentHistory = conversation.messages.slice(-MAX_HISTORY).map((m) => ({
+  const recentHistory = (conversation ? conversation.messages.slice(-MAX_HISTORY) : []).map((m) => ({
     role: m.role === "assistant" ? "assistant" : "user",
     content: m.content,
   }));
@@ -69,34 +68,79 @@ export const chatWithAssistant = asyncHandler(async (req, res) => {
     throw new Error("Sphere couldn't respond right now. Please try again.");
   }
 
+  // Groq occasionally returns an empty string instead of throwing — treat
+  // that the same as a failure instead of letting it crash on save.
+  if (!reply || !reply.trim()) {
+    res.status(502);
+    throw new Error("Sphere didn't have anything to say — please try rephrasing your message.");
+  }
+
+  // Only create the conversation once we have a real reply, so failed
+  // first messages don't leave empty chats behind.
+  if (!conversation) {
+    conversation = new Conversation({
+      user: req.user._id,
+      title: makeTitle(message),
+      messages: [],
+    });
+  } else if (!conversation.title) {
+    // older chats created before titles existed
+    conversation.title = makeTitle(conversation.messages[0]?.content || message);
+  }
+
   conversation.messages.push({ role: "user", content: message });
   conversation.messages.push({ role: "assistant", content: reply });
-  if (conversation.messages.length > 60) {
-    conversation.messages = conversation.messages.slice(-60);
+  if (conversation.messages.length > MAX_STORED) {
+    conversation.messages = conversation.messages.slice(-MAX_STORED);
   }
   await conversation.save();
 
-  res.json({ success: true, reply, userName: req.user.name, projectId: projectKey });
+  res.json({
+    success: true,
+    reply,
+    userName: req.user.name,
+    conversationId: conversation._id,
+    title: conversation.title,
+  });
 });
 
-// @route GET /api/assistant/history?projectId=...
-export const getAssistantHistory = asyncHandler(async (req, res) => {
-  const project = await resolveProject(req.query.projectId, req.user._id);
-  const projectKey = project ? project._id : null;
-  const conversation = await Conversation.findOne({ user: req.user._id, project: projectKey });
-  res.json({ success: true, messages: conversation?.messages || [] });
+// @route GET /api/assistant/conversations
+// Sidebar list — newest first, without the full messages.
+export const listConversations = asyncHandler(async (req, res) => {
+  const docs = await Conversation.find({ user: req.user._id, "messages.0": { $exists: true } })
+    .sort({ updatedAt: -1 })
+    .limit(MAX_CONVERSATIONS)
+    .select({ title: 1, updatedAt: 1, createdAt: 1, messages: { $slice: 1 } });
+
+  const conversations = docs.map((c) => ({
+    _id: c._id,
+    title: c.title || makeTitle(c.messages?.[0]?.content),
+    updatedAt: c.updatedAt,
+    createdAt: c.createdAt,
+  }));
+
+  res.json({ success: true, conversations });
 });
 
-// @route DELETE /api/assistant/history?projectId=...
-export const clearAssistantHistory = asyncHandler(async (req, res) => {
-  const project = await resolveProject(req.query.projectId, req.user._id);
-  const projectKey = project ? project._id : null;
-  await Conversation.findOneAndUpdate(
-    { user: req.user._id, project: projectKey },
-    { messages: [] },
-    { upsert: true }
-  );
-  res.json({ success: true, message: "Conversation history cleared" });
+// @route GET /api/assistant/conversations/:id
+export const getConversation = asyncHandler(async (req, res) => {
+  const conversation = await findOwnedConversation(req.params.id, req.user._id, res);
+  res.json({
+    success: true,
+    conversation: {
+      _id: conversation._id,
+      title: conversation.title,
+      messages: conversation.messages,
+      updatedAt: conversation.updatedAt,
+    },
+  });
+});
+
+// @route DELETE /api/assistant/conversations/:id
+export const deleteConversation = asyncHandler(async (req, res) => {
+  const conversation = await findOwnedConversation(req.params.id, req.user._id, res);
+  await conversation.deleteOne();
+  res.json({ success: true, message: "Conversation deleted" });
 });
 
 // @route POST /api/assistant/remember  { fact: string }

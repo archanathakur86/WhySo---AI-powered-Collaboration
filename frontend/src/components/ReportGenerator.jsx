@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import ReactMarkdown from "react-markdown";
 import toast from "react-hot-toast";
 import api from "../api/axios.js";
+import Markdown from "./Markdown.jsx";
 
 export default function ReportGenerator({ projectId, initialReadme, onReadmeGenerated }) {
   const [report, setReport] = useState(null);
@@ -78,8 +78,8 @@ export default function ReportGenerator({ projectId, initialReadme, onReadmeGene
           </button>
         )}
         {report && (
-          <div className="mt-4 prose prose-sm max-w-none bg-brand-50 border border-brand-100 rounded-lg p-4">
-            <ReactMarkdown>{report}</ReactMarkdown>
+          <div className="mt-4 bg-brand-50 border border-brand-100 rounded-lg p-4">
+            <Markdown>{report}</Markdown>
           </div>
         )}
       </div>
@@ -106,8 +106,8 @@ export default function ReportGenerator({ projectId, initialReadme, onReadmeGene
 
         {readme && !editingReadme && (
           <>
-            <div className="mt-4 prose prose-sm max-w-none bg-brand-50 border border-brand-100 rounded-lg p-4 max-h-96 overflow-y-auto">
-              <ReactMarkdown>{readme}</ReactMarkdown>
+            <div className="mt-4 bg-brand-50 border border-brand-100 rounded-lg p-4 max-h-96 overflow-y-auto">
+              <Markdown>{readme}</Markdown>
             </div>
             <button className="btn btn-secondary text-sm mt-3" onClick={() => setEditingReadme(true)}>
               ✏️ Edit README

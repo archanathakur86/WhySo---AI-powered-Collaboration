@@ -103,7 +103,6 @@ export default function MembersPanel({ project, currentUserId, onUpdated }) {
           <div className="mt-4 text-xs text-slate-500 bg-slate-50 rounded-lg p-3 space-y-1">
             <p><span className="font-medium text-slate-700">Editor</span> — can create/edit notes, upload files, and comment.</p>
             <p><span className="font-medium text-slate-700">Viewer</span> — can view everything and comment, but can't edit.</p>
-            <p><span className="font-medium text-slate-700">Commentor</span> — like Google Sheets commenting: can view and leave comments only, no editing.</p>
           </div>
         )}
       </div>

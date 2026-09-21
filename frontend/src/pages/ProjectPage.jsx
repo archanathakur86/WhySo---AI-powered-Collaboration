@@ -143,8 +143,8 @@ export default function ProjectPage() {
       {tab === "Members" && (
         <MembersPanel project={project} currentUserId={user?._id} onUpdated={(p) => setProject(p)} />
       )}
+      {tab === "Discussion" && <CommentsPanel projectId={projectId} project={project} />}
 
-      {tab === "Discussion" && <CommentsPanel projectId={projectId} />}
     </div>
   );
 }

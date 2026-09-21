@@ -9,17 +9,27 @@ const messageSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// One document = one chat (like a ChatGPT conversation).
+// A user can now have MANY conversations.
 const conversationSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    // null = the "general" assistant chat (used outside any specific project, e.g. on the dashboard)
-    project: { type: mongoose.Schema.Types.ObjectId, ref: "Project", default: null },
-    messages: [messageSchema], // capped to last 60 in controller logic
+    title: { type: String, default: "" }, // auto-generated from the first message
+    messages: [messageSchema], // capped in controller logic
   },
   { timestamps: true }
 );
 
-// one conversation per user per project (and one per user for the general/no-project chat)
-conversationSchema.index({ user: 1, project: 1 }, { unique: true });
+// Fast "list my chats, newest first"
+conversationSchema.index({ user: 1, updatedAt: -1 });
 
-export default mongoose.model("Conversation", conversationSchema);
+const Conversation = mongoose.model("Conversation", conversationSchema);
+
+// The old version of this model had `unique: true` on `user` (only one chat per
+// user). That unique index still exists in MongoDB and would block creating a
+// 2nd chat, so we sync indexes once on startup to drop it.
+Conversation.syncIndexes().catch((err) =>
+  console.warn("Conversation index sync skipped:", err.message)
+);
+
+export default Conversation;

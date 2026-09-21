@@ -76,19 +76,71 @@ export const explainCode = async (code, filename = "") => {
   return chatCompletion(messages, { maxTokens: 700 });
 };
 
-export const reviewCodeDiff = async (oldCode, newCode, filename = "") => {
-  const messages = [
-    {
-      role: "system",
-      content:
-        "You are a senior code reviewer, similar to a GitHub PR reviewer. Given the old and new version of a file, summarize what changed, flag potential risks or bugs introduced, and suggest improvements. Be specific and concise. Format as: '### Summary', '### Risks', '### Suggestions'.",
-    },
-    {
-      role: "user",
-      content: `File: ${filename}\n\n--- OLD VERSION ---\n${oldCode || "(no previous version)"}\n\n--- NEW VERSION ---\n${newCode}`,
-    },
-  ];
-  return chatCompletion(messages, { maxTokens: 800 });
+const SEVERITIES = ["low", "medium", "high"];
+
+const normalizeReview = (parsed) => {
+  const risks = (Array.isArray(parsed.risks) ? parsed.risks : [])
+    .slice(0, 6)
+    .map((r) =>
+      typeof r === "string"
+        ? { severity: "medium", description: r.trim() }
+        : {
+            severity: SEVERITIES.includes(r?.severity) ? r.severity : "medium",
+            description: String(r?.description || "").trim(),
+          }
+    )
+    .filter((r) => r.description);
+
+  const suggestions = (Array.isArray(parsed.suggestions) ? parsed.suggestions : [])
+    .slice(0, 6)
+    .map((x) => String(x).trim())
+    .filter(Boolean);
+
+  // Trust the model's overall level only if it's valid; otherwise derive it from the worst risk.
+  const worst = SEVERITIES.slice().reverse().find((sev) => risks.some((r) => r.severity === sev)) || "low";
+  const riskLevel = SEVERITIES.includes(parsed.riskLevel) ? parsed.riskLevel : worst;
+
+  return { summary: String(parsed.summary || "").trim(), riskLevel, risks, suggestions };
+};
+
+/**
+ * PR-style review for teams that have no human reviewer.
+ * - With a previous version: pass `diffText` (unified diff of old -> new).
+ * - First version: pass `code` (the whole file).
+ * Returns { summary, riskLevel, risks: [{severity, description}], suggestions: [string] }
+ */
+export const reviewCodeDiff = async ({ filename = "", diffText = "", code = "", isFirstVersion = false }) => {
+  const system =
+    "You are a senior engineer doing a pull-request review for a small team or student project that has no human reviewer, " +
+    "so bugs would otherwise ship unnoticed. Be specific, practical and honest. " +
+    'Respond ONLY as JSON: {"summary": "2-4 plain-English sentences on what changed and why it matters", ' +
+    '"riskLevel": "low|medium|high", ' +
+    '"risks": [{"severity": "low|medium|high", "description": "a concrete bug, regression, security or edge-case problem, naming the function/variable involved"}], ' +
+    '"suggestions": ["a concrete, actionable improvement"]}. ' +
+    "Rules: only report problems you can point to in the code shown; do not invent code or files. " +
+    "If you find no real risks return an empty risks array and riskLevel \"low\". Max 5 risks and 5 suggestions, most important first.";
+
+  const user = isFirstVersion
+    ? `File: ${filename}\nThis is the FIRST version of the file. Review the whole file.\n\n${code}`
+    : `File: ${filename}\nBelow is a unified diff from the previous version to the new version. Lines starting with "-" were removed, lines starting with "+" were added, other lines are unchanged context.\n\n${diffText}`;
+
+  const raw = await chatCompletion(
+    [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    { maxTokens: 900, jsonMode: true, temperature: 0.2 }
+  );
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("The AI returned an unreadable review. Please try again.");
+  }
+  const review = normalizeReview(parsed);
+  if (!review.summary) throw new Error("The AI returned an empty review. Please try again.");
+  return review;
 };
 
 export const generateReadme = async (projectName, description, fileSummaries = [], noteSummaries = []) => {
@@ -144,16 +196,31 @@ export const extractActionItems = async (noteContent) => {
   }
 };
 
-export const generateWeeklyReport = async (projectName, activityLogText) => {
+export const generateWeeklyReport = async (projectName, activityLogText, { from = "", to = "", taskSummary = "" } = {}) => {
   const messages = [
     {
       role: "system",
       content:
-        "You are a project manager assistant. Turn raw activity logs into a concise, stakeholder-ready weekly progress report in Markdown. Group by contributor. Mention what was worked on and overall momentum. Keep it under 300 words.",
+        "You are a project manager writing a short weekly progress report for stakeholders. " +
+        "Write in Markdown using ONLY: '##' section headings, '###' sub-headings, bullet lists ('- ') and **bold**. " +
+        "Never use tables, HTML tags (like <br>), code fences or horizontal rules. Do not add a title, a date line or a signature - the app already shows those. " +
+        "Use exactly these sections, in this order:\n" +
+        "## Summary - 2 or 3 sentences on overall momentum.\n" +
+        "## Progress by contributor - one '###' per person, then bullets of what they did (mention dates like 2026-09-18 when useful).\n" +
+        "## Tasks - only if task data is provided: how many are done / in progress / to do, what was completed, and any open high-priority items.\n" +
+        "## Next steps - 1 to 3 bullets, only if they follow from the data.\n" +
+        "Stick strictly to the data provided; never invent people, dates, files or numbers. Keep it under 250 words.",
     },
-    { role: "user", content: `Project: ${projectName}\n\nActivity log:\n${activityLogText}` },
+    {
+      role: "user",
+      content:
+        `Project: ${projectName}\nReporting period: ${from} to ${to}\n\nActivity log:\n${activityLogText}` +
+        (taskSummary ? `\n\nTask board:\n${taskSummary}` : ""),
+    },
   ];
-  return chatCompletion(messages, { maxTokens: 600 });
+  const report = await chatCompletion(messages, { maxTokens: 700 });
+  // Safety net: models sometimes emit <br> despite instructions, and react-markdown would print it literally.
+  return report.replace(/<br\s*\/?>/gi, "\n");
 };
 
 export const computeHealthInsight = async (stats) => {
