@@ -13,19 +13,29 @@ export default function Register() {
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const res = await api.post("/auth/register", form);
-      login(res.data.user, res.data.token);
-      toast.success(`Welcome to WhySo, ${res.data.user.name}!`);
-      navigate("/");
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Registration failed");
-    } finally {
-      setLoading(false);
-    }
-  };
+  e.preventDefault();
+  setLoading(true);
+
+  const slowTimer = setTimeout(() => {
+    toast.loading("Waking up the server, this may take up to 30 seconds...", {
+    id: "wake",
+    duration: 60000,
+  });
+  }, 3000);
+
+  try {
+    const res = await api.post("/auth/register", form);
+    login(res.data.user, res.data.token);
+    toast.success(`Welcome to WhySo, ${res.data.user.name}!`);
+    navigate("/");
+  } catch (err) {
+    toast.error(err.response?.data?.message || "Registration failed");
+  } finally {
+    clearTimeout(slowTimer);
+    toast.dismiss("wake");
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">

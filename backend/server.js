@@ -38,7 +38,9 @@ app.use((req, res, next) => {
 app.get("/", (req, res) => {
   res.json({ success: true, message: "WhySo API is running" });
 });
-
+app.get("/health", (req, res) => {
+  res.status(200).send("ok");
+});
 app.use("/api/auth", authRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/notes", noteRoutes);

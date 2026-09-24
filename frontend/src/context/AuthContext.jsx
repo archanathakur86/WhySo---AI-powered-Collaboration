@@ -22,11 +22,14 @@ export const AuthProvider = ({ children }) => {
         setUser(res.data.user);
         localStorage.setItem("user", JSON.stringify(res.data.user));
       })
-      .catch(() => {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        setUser(null);
-      })
+      .catch((err) => {
+  // sirf invalid token (401) pe logout karo, network/timeout pe nahi
+    if (err.response?.status === 401) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      setUser(null);
+    }
+  })
       .finally(() => setLoading(false));
   }, []);
 

@@ -12,7 +12,12 @@ import VoiceAssistant from "./components/VoiceAssistant.jsx";
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
-  if (loading) return <div className="p-10 text-center text-slate-500">Loading...</div>;
+  if (loading)
+  return (
+    <div className="p-10 text-center text-slate-500">
+      Loading... The server may take up to 30 seconds to wake up on the first visit.
+    </div>
+  );
   if (!user) return <Navigate to="/login" replace />;
   return children;
 };

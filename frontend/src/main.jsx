@@ -6,6 +6,9 @@ import App from "./App.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import "./index.css";
 
+const BACKEND_URL = "https://whyso-ai-powered-collaboration.onrender.com";
+fetch(`${BACKEND_URL}/health`, { mode: "no-cors" }).catch(() => {});
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
